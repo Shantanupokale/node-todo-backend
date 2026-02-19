@@ -95,28 +95,45 @@ export const deleteTodo = async (req, res, next) => {
 };
 
 export const getTodos = async (req, res, next) => {
-  try {
+ try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 5;
-
-    if (page < 1 || limit < 1) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid pagination values"
-      });
-    }
+    const search = req.query.search || "";
+    const bookmarked = req.query.bookmarked;
 
     const offset = (page - 1) * limit;
+    let conditions = [];
+    let values = [];
+    let index = 1;
 
-    const todosResult = await pool.query(
-      `SELECT * FROM todos
-       ORDER BY created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
+    // search query
+    if (search) {
+      conditions.push(`(title ILIKE $${index} OR description ILIKE $${index})`);
+      values.push(`%${search}%`);
+      index++;
+    }
+
+    if (bookmarked === "true") {
+      conditions.push(`bookmarked = true`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const todosQuery = `
+      SELECT * FROM todos
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $${index} OFFSET $${index + 1}
+    `;
+    values.push(limit, offset);
+
+    const todosResult = await pool.query(todosQuery, values);
+
+    const countQuery = `SELECT COUNT(*) FROM todos ${whereClause} `;
 
     const countResult = await pool.query(
-      `SELECT COUNT(*) FROM todos`
+      countQuery,
+      values.slice(0, index - 1)
     );
 
     const total = parseInt(countResult.rows[0].count);
@@ -132,7 +149,7 @@ export const getTodos = async (req, res, next) => {
         totalPages
       }
     });
-
+  
   } catch (error) {
     next(error);
   }
@@ -167,4 +184,31 @@ export const getTodoById = async (req, res, next) => {
     } catch (error) {
         next(error);
     }
+};
+
+export const toggleBookmark = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `UPDATE todos SET bookmarked = NOT bookmarked,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING * `, [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Todo not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    next(error);
+  }
 };
