@@ -2,6 +2,8 @@ import express, { json } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import todoRoutes from './routes/todo.routes.js';
+import userRoutes from './routes/user.routes.js';
+
 import { connectDB } from './config/db.js';
 
 dotenv.config();
@@ -13,6 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/todos', todoRoutes);
+app.use('/api/users', userRoutes);
 
 app.get('/',(req,res) => {
     res.status(200).json({message: " backned is running "})

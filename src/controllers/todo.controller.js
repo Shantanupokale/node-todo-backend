@@ -13,8 +13,8 @@ export const createTodo = async (req, res, next) => {
         }
 
         const result = await pool.query(
-            `INSERT INTO todos (title, description) VALUES ($1, $2) RETURNING *`,
-            [title, description]
+            `INSERT INTO todos (title, description , user_id) VALUES ($1, $2, $3) RETURNING *`,
+            [title, description, req.user.userId]
         );
         res.status(201).json({
             success: true,
@@ -50,8 +50,8 @@ export const updateTodo = async (req,res,next)=> {
 
         const result = await pool.query(
             `UPDATE todos SET title = $1, description = $2, status = $3, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $4 RETURNING *`,
-            [title.trim(), description, status, id]
+             WHERE id = $4 AND user_id = $5 RETURNING *`,
+            [title.trim(), description, status, id , req.user.userId]
         );
 
         if (result.rowCount === 0) {
@@ -76,8 +76,8 @@ export const deleteTodo = async (req, res, next) => {
 
         const result = await pool.query(
             `DELETE FROM todos
-             WHERE id = $1`,
-            [id]
+            WHERE id = $1 AND user_id = $2`,
+            [id, req.user.userId]
         );
         if (result.rowCount === 0) {
             return res.status(404).json({
@@ -105,6 +105,10 @@ export const getTodos = async (req, res, next) => {
     let conditions = [];
     let values = [];
     let index = 1;
+    
+    conditions.push(`user_id = $${index}`);
+    values.push(req.user.userId);
+    index++;
 
     // search query
     if (search) {
@@ -192,8 +196,8 @@ export const toggleBookmark = async (req, res, next) => {
     const result = await pool.query(
       `UPDATE todos SET bookmarked = NOT bookmarked,
           updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-      RETURNING * `, [id]
+      WHERE id = $1 AND user_id = $2
+      RETURNING * `, [id , req.user.userId]
     );
 
     if (result.rowCount === 0) {
