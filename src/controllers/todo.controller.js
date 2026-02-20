@@ -4,7 +4,7 @@ const allowedStatus = ["in-progress", "on-hold", "complete"];
 
 export const createTodo = async (req, res, next) => {
     try {
-        const { title, description } = req.body;
+        const { title, description , category_id } = req.body;
         if (!title || title.trim() === '') {
             return res.status(400).json({
                 success: false,
@@ -13,8 +13,8 @@ export const createTodo = async (req, res, next) => {
         }
 
         const result = await pool.query(
-            `INSERT INTO todos (title, description , user_id) VALUES ($1, $2, $3) RETURNING *`,
-            [title, description, req.user.userId]
+            `INSERT INTO todos (title, description , user_id , category_id) VALUES ($1, $2, $3 , $4) RETURNING *`,
+            [title, description, req.user.userId , category_id || null ]
         );
         res.status(201).json({
             success: true,
@@ -95,7 +95,7 @@ export const deleteTodo = async (req, res, next) => {
 };
 
 export const getTodos = async (req, res, next) => {
- try {
+  try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 5;
     const search = req.query.search || "";
@@ -105,7 +105,7 @@ export const getTodos = async (req, res, next) => {
     let conditions = [];
     let values = [];
     let index = 1;
-    
+
     conditions.push(`user_id = $${index}`);
     values.push(req.user.userId);
     index++;
@@ -124,9 +124,14 @@ export const getTodos = async (req, res, next) => {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const todosQuery = `
-      SELECT * FROM todos
-      ${whereClause}
-      ORDER BY created_at DESC
+      SELECT 
+        t.*,
+        c.display_name AS category_name
+      FROM todos t
+      LEFT JOIN categories c
+        ON t.category_id = c.id
+      ${whereClause.replace(/user_id|title|description|bookmarked/g, (match) => `t.${match}`)}
+      ORDER BY t.created_at DESC
       LIMIT $${index} OFFSET $${index + 1}
     `;
     values.push(limit, offset);
@@ -153,7 +158,7 @@ export const getTodos = async (req, res, next) => {
         totalPages
       }
     });
-  
+
   } catch (error) {
     next(error);
   }
@@ -169,9 +174,10 @@ export const getTodoById = async (req, res, next) => {
                 message: 'Todo ID is required'
             });
         }
-        const result = await pool.query(
-            `SELECT * FROM todos WHERE id = $1`,
-            [id]
+       const result = await pool.query(
+        `SELECT * FROM todos 
+        WHERE id = $1 AND user_id = $2`,
+        [id, req.user.userId]
         );
 
         if (result.rowCount === 0) {
